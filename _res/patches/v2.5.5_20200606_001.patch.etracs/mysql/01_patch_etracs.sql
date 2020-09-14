@@ -2,9 +2,11 @@
 alter table aftxn add lockid varchar(50) null 
 ; 
 
+/* 
 alter table af_control add constraint fk_af_control_afid 
 	foreign key (afid) references af (objid) 
 ; 
+*/
 
 alter table af_control add constraint fk_af_control_allocid 
 	foreign key (allocid) references af_allocation (objid) 
