@@ -1,0 +1,7 @@
+#----------------------------------------
+# CLOUD GDX
+#----------------------------------------
+provider=node-script
+host=${cloud-server}:3000
+channel=${channel}
+timeout=60000
