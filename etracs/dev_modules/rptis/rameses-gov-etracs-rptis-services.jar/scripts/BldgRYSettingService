@@ -8,7 +8,7 @@ public class BldgRYSettingService
     @Env 
     def env 
     
-	@ActiveDB('bldgrysetting')
+    @ActiveDB('bldgrysetting')
     def em
 
     @DataContext('rysetting_bldg')

@@ -44,11 +44,19 @@ update rpu set
 where objid=$P{rpuid}
 
 
+[modifySubLedgerPin]
+update rptledger rl, rptledger_subledger sl set 
+  fullpin = concat($P{newpin}, '-', sl.subacctno),
+  barangayid = $P{barangayid}
+where faasid = $P{faasid}
+and rl.objid = sl.parent_objid
+
 [modifyLedgerPin]
 update rptledger set 
   fullpin=$P{newpin},
   barangayid = $P{barangayid}
 where faasid = $P{faasid}
+and not exists(select * from rptledger_subledger where objid = rptledger.objid)
 
 [modifyFaasPin]
 update faas set 
@@ -82,7 +90,7 @@ select objid, fullpin, rpuid, realpropertyid, taxpayer_objid from faas where obj
 
 
 [findLandFaas]
-select f.objid, f.realpropertyid, f.rpuid, f.fullpin, 
+select f.objid, f.realpropertyid, f.rpuid, f.fullpin, rp.pin as rp_pin,
 	rp.barangayid as barangay_objid, b.name as barangay_name  
 from faas f 
 	inner join realproperty rp on f.realpropertyid = rp.objid 

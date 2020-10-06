@@ -117,6 +117,7 @@ class RPTReceiptCompromiseService
 		params.lastyearpaid = lastitem.year 
 		params.lastqtrpaid = (lastitem.qtr ? lastitem.qtr : 4)
 		em_rptledger.find([objid:params.objid]).update(params)
+		em_rptledger_item.find([parentid: params.objid, year: params.lastyearpaid]).delete()
 	}
 
 	@ProxyMethod
@@ -155,7 +156,6 @@ class RPTReceiptCompromiseService
 		def bill = [:]
 
 		if (receipt.requiredpayment == null || receipt.requiredpayment.type == 'downpayment'){
-			em_compromise.debug = true 
 			rptledger.postingitems = em_compromise.getUnpaidItems([objid:receipt.compromise.objid])
 			bill = [billdate: receipt.receiptdate, rptledger: rptledger, cy: dtSvc.serverYear]
 			bill.partial = [amount:receipt.amount]
@@ -210,7 +210,6 @@ class RPTReceiptCompromiseService
 
 	@ProxyMethod
 	public def getUnpaidInstallments(compromise) {
-		em_compromise_installment.debug = true 
 		def list = em_compromise_installment
 						.find([parentid:compromise.objid, fullypaid:false])
 						.orderBy('installmentno')
@@ -495,12 +494,13 @@ class RPTReceiptCompromiseService
 		def items = em_rptpayment_item.find([parentid:pmt.objid]).list()
 		items.each{
 			def item = [:]
-			item.parentid = pmt.rptledgerid
+			item.parentid = compromise.rptledgerid
 			item.rptledgerfaasid = it.rptledgerfaasid
-			item.basicav = it.ledgerfaas.assessedvalue
-			item.sefav = it.ledgerfaas.assessedvalue
-			item.av = it.ledgerfaas.assessedvalue
-			item.revtype it.revtype 
+			item.rptledgerfaas = it.rptledgerfaas
+			item.basicav = it.rptledgerfaas.assessedvalue
+			item.sefav = it.rptledgerfaas.assessedvalue
+			item.av = it.rptledgerfaas.assessedvalue
+			item.revtype = it.revtype 
 			item.year = it.year 
 			item.amount = it.amount 
 			item.amtpaid = 0
@@ -535,8 +535,19 @@ class RPTReceiptCompromiseService
 		info.interestpaid = '{interestpaid - :interest}'
 		info.discount = '{discount - :discount}'
 
-		em_rptpayment_item.find([parentid:pmt.objid]).list().each{
-			em_compromise_item.find([parentid:compromise.objid, year:it.year, revtype:it.revtype, revperiod:it.revperiod, priority:it.priority])
+		def items = em_rptpayment_item.find([parentid:pmt.objid]).list()
+		items.each {
+			def filter = [
+				parentid: compromise.objid, 
+				year: it.year, 
+				qtr: it.qtr,
+				revtype: it.revtype, 
+				revperiod: it.revperiod, 
+				priority: it.priority,
+				rptledgerfaasid: it.rptledgerfaasid,
+			]
+			em_compromise_item
+				.find(filter)
 				.update(info, [amount:it.amount, interest:it.interest, discount:it.discount])
 		}
 	}
@@ -599,35 +610,43 @@ class RPTReceiptCompromiseService
 	//distribute payment proportionally to compromise items 
 	void postCapturedItemCredit(compromise, receipt) {
 		def partialamt = receipt.amount 
-		def openitems = em_compromise_item.find([parentid: compromise.objid]).orderBy('year asc').list().findAll{it.balance > 0}
+		def openitems = em_compromise_item.find([parentid: compromise.objid]).orderBy('year, qtr ').list().findAll{it.balance > 0}
 
 		def priorities = openitems.priority.unique().sort()
 		def yrs = openitems.year.unique().sort();
+
+		def toqtr = 4
 
 		for (int idx = 0; idx < yrs.size(); idx++){
 			if (partialamt <= 0) break;
 
 			def yritems = openitems.findAll{it.year == yrs[idx]}
+			def qtrs = yritems.qtr.unique().sort();
 
-			for (int i = 0; i < priorities.size(); i++){
+			for (int q = 0; q < qtrs.size(); q++){
 				if (partialamt <= 0) break;
 
-				def items = yritems.findAll{it.priority == priorities[i]}
-				def itembalance = numSvc.round(items.balance.sum())
-				if (partialamt >= itembalance){
-					partialamt -= itembalance 
-					//fully paid items 
-					items.each{
-						it.amtpaid = it.amount
-						it.interestpaid = it.interest 
-						it.balance = 0 
-						em_compromise_item.update(it)
+				def qtritems = yritems.findAll{ it.qtr == qtrs[q]}
+				for (int i = 0; i < priorities.size(); i++){
+					if (partialamt <= 0) break;
+
+					def items = qtritems.findAll{it.priority == priorities[i]}
+					def itembalance = numSvc.round(items.balance.sum())
+					if (partialamt >= itembalance){
+						partialamt -= itembalance 
+						//fully paid items 
+						items.each{
+							it.amtpaid = it.amount
+							it.interestpaid = it.interest 
+							it.balance = 0 
+							em_compromise_item.update(it)
+						}
 					}
-					continue
-				}
-				else if (partialamt > 0){
-					distributePartial(partialamt, items)
-					break;
+					else if (partialamt > 0){
+						distributePartial(partialamt, items)
+						partialamt = 0
+						break;
+					}
 				}
 			}
 		}
