@@ -179,43 +179,27 @@ class ResectionService
     @ProxyMethod
     public def createNewFaas(item) {
     	def faas = faasSvc.openFaas(item.faas)
-    	def faasid = faas.objid 
-    	def tdno = faas.tdno 
+		def prevfaas = buildPreviousFaas(faas)
 
-    	faas.objid = 'F' + new java.rmi.server.UID()
+    	faas.objid = prevfaas.faasid
     	faas.state = 'PENDING'
     	faas.tdno = item.newfaas.tdno 
+		faas.prevtdno = prevfaas.prevtdno 
     	faas.datacapture = false
     	faas.utdno = faasSvc.generateUniqueTdNo(faas)
     	faas.txntype = faasSvc.getTxnType('RS')
     	faas.memoranda = item.memoranda
     	faas.effectivityyear = dtSvc.serverYear + 1
 
-    	faas.previousfaases = []
-    	faas.previousfaases << [
-    		objid: 'PF' + new java.rmi.server.UID(),
-    		faasid: faas.objid,
-    		prevfaasid: faasid,
-    		prevrpuid: faas.rpu.objid,
-    		prevtdno: tdno,
-    		prevpin: faas.fullpin,
-    		prevowner: faas.owner.name,
-    		prevadministrator: faas.administrator?.name,
-    		prevav: faas.rpu.totalav,
-    		prevmv: faas.rpu.totalmv,
-    		prevareasqm: faas.rpu.totalareasqm,
-    		prevareaha: faas.rpu.totalareaha,
-    		preveffectivity: faas.effectivityyear,
-    	]
-
+    	faas.previousfaases = [prevfaas]
     	faas.backtaxes = [] 
     	faas.rp.state = 'INTERIM'
 
     	if (item.faas.rputype == 'land') {
     		faas.rp.objid = 'RP' + new java.rmi.server.UID()
     		faas.rp.pin = item.newfaas.fullpin 
-    		faas.rp.section = item.newfaas.section.toString()
-    		faas.rp.parel = item.newfaas.parel.toString()
+    		faas.rp.section = item.newfaas.ssection
+    		faas.rp.parcel = item.newfaas.sparcel
     	} else {
     		faas.rp = rpSvc.open([objid:item.newfaas.rpid])
     	}
@@ -252,7 +236,7 @@ class ResectionService
     @ProxyMethod
     public def assignNewTdNos(entity){
     	entity.items.each{
-    		if (it.newfaas.objid) {
+    		if (it.newfaas.objid && !it.newfaas.tdno) {
 				assignFaasNewTdNo(it)
     		}
     	}
@@ -298,18 +282,44 @@ class ResectionService
 
     @ProxyMethod
     public void insertFaasSignatories(entity) {
-        em_resection.deleteFaasTasks(entity)
-        em_resection.insertFaasSignatories(entity)
+        def _taskid = entity._taskid
+    	def currTask = em_task.find([objid: _taskid]).first()
+        if (!currTask) return 
+
+    	def items = em_resection_item.find([parent_objid: entity.objid]).list()
+    	items.each {
+    		faasSvc.insertOnlineFaasSignatory([
+                taskid: _taskid, 
+                faasid: it.newfaas?.objid, 
+                task: currTask
+            ])
+    	}
     }
 
 	@ProxyMethod
 	public void updateSignatories(task) {
-		//TODO:
+		if (task.state.matches('assign.*') || env.action?.matches('return.*'))
+            return;
+
+        def t = [
+            objid       : task.objid,
+            refid       : task.refid,
+            state       : task.state, 
+            action      : task.action, 
+            actor       : task.actor, 
+            enddate     : task.enddate,
+        ]
+
+        def items = em_resection_item.find([parent_objid: task.refid]).list()
+        items.each {
+            t.refid = it.newfaas.objid
+            faasSvc.updateSignatoryInfo(t)
+        }
 	}
 
 
     void assignFaasNewTdNo(item){
-    	def faas = faasSvc.openFaas(item.newfaas)
+    	def faas = em_resection.findFaasInfo(item.newfaas)
     	if (!faas) {
             throw new Exception('FAAS ' + item.newfaas.objid + ' does not exist or has been deleted.')
         }
@@ -327,7 +337,7 @@ class ResectionService
 	def validateAndLoadFaases(entity) {
 		//check duplicate 
 		def resection = em_resection.select('txnno')
-								    .where("objid <> :objid and section = :section and state <> 'APPROVED' ", entity)
+								    .where("objid <> :objid and section = :section and state <> 'APPROVED' and barangay_objid = :barangayid ", entity)
 								    .first()
 		if (resection)
 		throw new Exception('Duplicate resection with Txn No. ' + resection.txnno + ' is found.')
@@ -376,6 +386,24 @@ class ResectionService
 				e.printStackTrace()
 			}
 		}
+	}
+
+	def buildPreviousFaas(faas) {
+		return [
+			objid: faas.objid, 
+			faasid: 'F' + new java.rmi.server.UID(),
+			prevfaasid: faas.objid,
+			prevrpuid: faas.rpu.objid,
+			prevtdno: faas.tdno, 
+			prevpin: faas.fullpin,
+			prevowner: faas.owner.name,
+			prevadministrator: faas.administrator?.name,
+			prevav: faas.rpu.totalav,
+			prevmv: faas.rpu.totalmv,
+			prevareasqm: faas.rpu.totalareasqm,
+			prevareaha: faas.rpu.totalareaha,
+			preveffectivity: faas.effectivityyear,
+		]
 	}
 
 }

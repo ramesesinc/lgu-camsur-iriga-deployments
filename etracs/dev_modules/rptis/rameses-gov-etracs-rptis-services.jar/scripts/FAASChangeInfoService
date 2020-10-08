@@ -36,6 +36,9 @@ class FAASChangeInfoService
 	@Service('DBImageService')
 	def imageSvc 
 
+	@Service('RPTRedFlagService')
+	def redFlagSvc
+
 
 
 	@ProxyMethod
@@ -50,7 +53,7 @@ class FAASChangeInfoService
             changeinfo.taxpayer = entitySvc.open(changeinfo.newinfo.taxpayer)
         }
         else if (changeinfo.action == 'add_faas_requirement_document'){
-        	redflag.requirementtypeid = redflag.info.requirementtype.objid 
+        	changeinfo.requirementtypeid = changeinfo.newinfo.requirementtype?.objid 
         }
         else if (changeinfo.action == 'change_faas_sketch'){
             changeinfo.sketch = faasSvc.openSketch([objid: changeinfo.refid])
@@ -75,10 +78,6 @@ class FAASChangeInfoService
         	def imageids = em.getImageIds(redflag)
         	if (imageids){
 	            changeinfo.requirement = reqSvc.open(imageids[0])
-        		def images = imageSvc.getImages([refid:imageids[0].objid])
-        		if (images){
-	            	changeinfo.image = supportSvc.getImageByIds(images.objid)
-        		}
         	}
         }
         else if (changeinfo.action == 'change_faas_sketch'){
@@ -127,6 +126,16 @@ class FAASChangeInfoService
 	@ProxyMethod
 	public def getTxnTypes(  ) {
 		return faasSvc.getTxnTypes()
+	}
+
+	@ProxyMethod
+	public void checkAndUpdateLgu(changeinfo) {
+		if (!changeinfo.lguid) {
+			def lgu = em.findLgu(changeinfo)
+			if (lgu) {
+				changeinfo.lguid = lgu.lguid
+			}
+		}
 	}
 }
 

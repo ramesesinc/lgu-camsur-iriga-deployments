@@ -14,7 +14,13 @@ from (
 		rp.surveyno, 
 		b.name as barangay, 
 		rl.rputype, 
-		rl.totalav as totalav
+		(select max(assessedvalue) from rptledgerfaas 
+		 where rptledgerid = rl.objid 
+			 and $P{year} >= fromyear 
+			 and ($P{year} <= toyear or toyear = 0)
+			and state = 'APPROVED' 
+			and taxable = 1 
+		 ) as totalav
 	from rptledger rl 
 		inner join entity e on rl.taxpayer_objid = e.objid 
 		inner join barangay b on rl.barangayid = b.objid 
@@ -26,6 +32,7 @@ from (
     and rl.totalav > 0 
     and rl.taxable = 1
     and not exists(select * from faas_restriction where ledger_objid = rl.objid and state='ACTIVE')
+    and not exists(select * from rptledger_subledger where objid = rl.objid)
 )x
 order by x.fullpin
 

@@ -38,9 +38,9 @@ SELECT
 	f.prevtdno,
 	f.ryordinanceno,
 	f.ryordinancedate,
-	t.trackingno 
+	fl.trackingno 
 FROM faas f
-	LEFT JOIN rpttracking t ON f.objid = t.objid 
+	INNER JOIN faas_list fl ON f.objid = fl.objid 
 	INNER JOIN faas_txntype ft on f.txntype_objid = ft.objid 
 WHERE f.objid = $P{objid}
 
@@ -94,7 +94,13 @@ where rp.objid = $P{objid}
 
 
 [getActiveAnnotations]
-SELECT memoranda AS annotationtext FROM faasannotation WHERE faasid = $P{objid} AND state = 'APPROVED'
+SELECT 
+	fa.memoranda, 
+	fa.memoranda as annotationtext 
+FROM faasannotation fa
+	INNER JOIN faasannotation_faas faf on fa.objid = faf.parent_objid
+WHERE faf.faas_objid = $P{objid}
+  AND fa.state = 'APPROVED'
 
 
 [findLandReference]

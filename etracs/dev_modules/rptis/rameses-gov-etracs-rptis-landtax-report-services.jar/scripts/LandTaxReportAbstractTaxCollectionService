@@ -87,6 +87,32 @@ class LandTaxReportAbstractTaxCollectionService {
     }
 
 
+    @ProxyMethod 
+    def generateAbstractOfRPTCollectionSummary(entity) {
+        def remyr = dtsvc.getYear(entity.dtposted)
+
+        def params = [remittanceid:entity.objid]
+        def items = em.getAbstractOfRPTCollectionSummary(params)
+
+        if(! items ) throw new Exception('No records found.     ')
+        def header = [:]
+        header.TITLE = 'ABSTRACT OF REAL PROPERTY TAX COLLECTION SUMMARY'
+        header.PERIOD = ''
+        header.REMITTANCENO = entity.controlno; 
+        header.dtposted = dtsvc.format('MMMMM dd, yyyy', entity.controldate )
+        header.REMITTANCEDATE = header.dtposted;
+        header.REMITTANCEAMOUNT = entity.amount
+        header.COLLECTORNAME = entity.collector.name
+        header.COLLECTORTITLE = entity.collector.title
+        header.LIQUIDATINGOFFICER = entity.liquidatingofficer.name
+        header.LIQUIDATINGOFFICERTITLE = entity.liquidatingofficer.title
+        header.DATEPOSTED =  entity.controldate ;
+        header.AMTINWORDS = numSvc.convertDouble( entity.amount )
+
+        return  [ header:header, items:items]
+    }
+
+
     @ProxyMethod
     def generateAbstractOfRPTCollection( params ){ 
         String period;
@@ -119,9 +145,9 @@ class LandTaxReportAbstractTaxCollectionService {
             period += ' - ' + dtsvc.format('MMMMM dd, yyyy', todate);
         }
 
-        params.filter = ' liq.dtposted >= $P{fromdate} AND liq.dtposted < $P{todate} '
+        params.filter = ' liq.controldate >= $P{fromdate} AND liq.controldate < $P{todate} '
         if (params.postingtype && params.postingtype.code == 'byrem'){
-            params.filter = ' rem.dtposted between $P{fromdate} AND $P{todate} '
+            params.filter = ' rem.controldate >= $P{fromdate} AND rem.controldate < $P{todate} '
         }
 
         def items = em.getAbstractOfRPTCollection(params).each{buildPeriod(it)};

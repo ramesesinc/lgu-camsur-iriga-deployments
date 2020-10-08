@@ -631,8 +631,9 @@ update faas_list set tdno = $P{tdno} where objid = $P{objid}
 update rptledger set tdno = $P{tdno} where faasid = $P{objid} 
 
 [updateLedgerFaasTdNo]
-update rptledgerfaas rlf, rptledger rl set 
+update rlf set 
 	rlf.tdno = $P{tdno} 
+from rptledgerfaas rlf, rptledger rl
 where rlf.rptledgerid = rl.objid 
 and rlf.faasid = $P{objid} 
 
@@ -660,7 +661,9 @@ select
 	fa.memoranda,
 	fat.type
 from faas f 
-	inner join faasannotation fa on f.objid = fa.faasid 
+	inner join faasannotation_faas faf on f.objid = faf.faas_objid
+	inner join faasannotation fa on faf.parent_objid = fa.objid 
 	inner join faasannotationtype fat on fa.annotationtype_objid = fat.objid 
-where f.objid = $P{faasid}
+where faf.faas_objid = $P{faasid}
 order by fa.txnno desc 
+
