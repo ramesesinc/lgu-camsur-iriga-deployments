@@ -1,4 +1,4 @@
 app:
 
   modules:
-    - { order: 310, version: 1.50, file: "modules/market/rameses-gov-etracs-market.jar" }
+    - { order: 310, version: 1.51, file: "modules/market/rameses-gov-etracs-market.jar" }
